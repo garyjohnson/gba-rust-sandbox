@@ -1,0 +1,8 @@
+#!/bin/bash
+set -ex
+
+cargo build --release
+mkdir -p target/gba
+arm-none-eabi-objcopy -O binary target/thumbv4t-none-eabi/release/agb_template target/gba/agb_template.gba
+gbafix target/gba/agb_template.gba
+/Applications/mGBA.app/Contents/MacOS/mGBA target/gba/agb_template.gba
