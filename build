@@ -1,8 +1,11 @@
 #!/bin/bash
 set -ex
 
+NAME=breakout
+TARGET_PATH=target/gba
+
 cargo build --release
 mkdir -p target/gba
-arm-none-eabi-objcopy -O binary target/thumbv4t-none-eabi/release/agb_template target/gba/agb_template.gba
-gbafix target/gba/agb_template.gba
-/Applications/mGBA.app/Contents/MacOS/mGBA target/gba/agb_template.gba
+arm-none-eabi-objcopy -O binary target/thumbv4t-none-eabi/release/${NAME} ${TARGET_PATH}/${NAME}.gba
+gbafix ${TARGET_PATH}/${NAME}.gba
+/Applications/mGBA.app/Contents/MacOS/mGBA ${TARGET_PATH}/${NAME}.gba
