@@ -20,10 +20,24 @@ fn max(a: i32, b: i32) -> i32 {
     }
 }
 
+fn clamp(low: i32, value: i32, high: i32) -> i32 {
+    return min(max(value, low), high);
+}
+
+const fn color(r: u8, g: u8, b: u8) -> u16 {
+    let mut color: u16 = (b as u16) << 10;
+    color += (g as u16) << 5;
+    color += r as u16;
+    return color;
+}
+
 #[agb::entry]
 fn main() -> ! {
-    const WHITE: u16 = 0x0F00;
-    const BLACK: u16 = 0xFF0F;
+    // my color func doesn't work
+    //const WHITE: u16 = color(1, 1, 1);
+    //const BLACK: u16 = color(0, 0, 0);
+    const WHITE: u16 = 0x001F;
+    const BLACK: u16 = 0x03E0;
     const WHITE_PAL: u32 = 1;
     const BLACK_PAL: u32 = 2;
 
@@ -34,8 +48,13 @@ fn main() -> ! {
     const DEFAULT_VX: i32 = -2;
     const DEFAULT_VY: i32 = -2;
 
-    let mut max_x: i32 = display::HEIGHT;
-    let mut max_y: i32 = display::WIDTH;
+    let mut gba = agb::Gba::new();
+    let mut bitmap = gba.display.video.bitmap4();
+    let vblank = agb::interrupt::VBlank::get();
+    let mut mgba = agb::mgba::Mgba::new().unwrap();
+
+    let max_x: i32 = display::WIDTH;
+    let max_y: i32 = display::HEIGHT;
     let paddle_y_bottom: i32 = max_y - 10;
     let paddle_y_top: i32 = paddle_y_bottom - PADDLE_HEIGHT;
     let mut paddle_x: i32 = -1;
@@ -47,24 +66,22 @@ fn main() -> ! {
     let mut ball_vx: i32 = DEFAULT_VX;
     let mut ball_vy: i32 = DEFAULT_VY;
 
-    let mut gba = agb::Gba::new();
-    let mut bitmap = gba.display.video.bitmap4();
-
-    let draw_rect = |bmp: &mut display::bitmap4::Bitmap4, x: i32, y: i32, height: i32, width: i32, color_pal: u8| {
-        for x_pos in x..width {
-            for y_pos in y..height {
+    let draw_rect = |bmp: &mut display::bitmap4::Bitmap4, x_min: i32, y_min: i32, x_max: i32, y_max: i32, color_pal: u8| {
+        for x_pos in x_min..x_max {
+            for y_pos in y_min..y_max {
                 (*bmp).draw_point(x_pos, y_pos, color_pal);
             }
         }
     };
 
-    max_y = display::HEIGHT;
-    max_x = display::WIDTH;
-
     bitmap.set_palette_entry(WHITE_PAL, WHITE);
     bitmap.set_palette_entry(BLACK_PAL, BLACK);
 
+    mgba.set_level(agb::mgba::DebugLevel::Debug);
+
     loop {
+        vblank.wait_for_vblank();
+
         //mouse_info(&info);
 
         // CALC POSITIONS
@@ -112,5 +129,6 @@ fn main() -> ! {
         ball_x = ball_new_x;
         ball_y = ball_new_y;
 
+        mgba.print(format_args!("ball x: {} y: {} paddle x: {}", ball_x, ball_y, paddle_x), agb::mgba::DebugLevel::Debug).unwrap();
     }
 }
