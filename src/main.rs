@@ -33,17 +33,17 @@ const fn color(r: u16, g: u16, b: u16) -> u16 {
 }
 
 #[agb::entry]
-fn main() -> ! {
+fn main(mut gba: agb::Gba) -> ! {
     const WHITE: u16 = color(255, 255, 255);
     const BLACK: u16 = color(1,1,1);
     const RED: u16 = color(255, 1, 1);
     const GREEN: u16 = color(1, 255, 1);
     const BLUE: u16 = color(1, 1, 255);
-    const WHITE_PAL: u8 = 1;
-    const BLACK_PAL: u8 = 2;
-    const RED_PAL: u8 = 3;
-    const GREEN_PAL: u8 = 4;
-    const BLUE_PAL: u8 = 5;
+    const WHITE_PAL: u32 = 1;
+    const BLACK_PAL: u32 = 3;
+    const RED_PAL: u32 = 5;
+    const GREEN_PAL: u32 = 7;
+    const BLUE_PAL: u32 = 9;
 
     const PADDLE_WIDTH: i32 = 30;
     const PADDLE_HALF_WIDTH: i32 = PADDLE_WIDTH / 2;
@@ -53,11 +53,13 @@ fn main() -> ! {
     const DEFAULT_VY: i32 = -2;
     const PADDLE_VX: i32 = 2;
 
-    let mut gba = agb::Gba::new();
+    //let mut gba = agb::Gba::new();
     let mut bitmap = gba.display.video.bitmap4();
-    let vblank = agb::interrupt::VBlank::get();
-    let mut mgba = agb::mgba::Mgba::new().unwrap();
     let mut input = agb::input::ButtonController::new();
+    let vblank = agb::interrupt::VBlank::get();
+    /*
+    let mut mgba = agb::mgba::Mgba::new().unwrap();
+    */
 
     let max_x: i32 = display::WIDTH;
     let max_y: i32 = display::HEIGHT;
@@ -72,7 +74,11 @@ fn main() -> ! {
     let mut ball_vx: i32 = DEFAULT_VX;
     let mut ball_vy: i32 = DEFAULT_VY;
 
-    let draw_rect = |bmp: &mut display::bitmap4::Bitmap4, mut x_min: i32, mut y_min: i32, mut x_max: i32, mut y_max: i32, color_pal: u8| {
+    let mut paddle_offscreen_x: i32 = paddle_x;
+    let mut ball_offscreen_x: i32 = ball_x;
+    let mut ball_offscreen_y: i32 = ball_y;
+
+    let draw_rect = |bmp: &mut display::bitmap4::Bitmap4, mut x_min: i32, mut y_min: i32, mut x_max: i32, mut y_max: i32, color_pal: u32| {
         x_min = clamp(0, x_min, max_x);
         x_max = clamp(0, x_max, max_x);
 
@@ -81,12 +87,12 @@ fn main() -> ! {
 
         for x_pos in x_min..x_max {
             for y_pos in y_min..y_max {
-                (*bmp).draw_point(x_pos, y_pos, color_pal);
+                (*bmp).draw_point(x_pos, y_pos, color_pal as u8);
             }
         }
     };
 
-    let draw_rect_page = |bmp: &mut display::bitmap4::Bitmap4, mut x_min: i32, mut y_min: i32, mut x_max: i32, mut y_max: i32, color_pal: u8, front: bool| {
+    let draw_rect_page = |bmp: &mut display::bitmap4::Bitmap4, mut x_min: i32, mut y_min: i32, mut x_max: i32, mut y_max: i32, color_pal: u32, front: bool| {
         x_min = clamp(0, x_min, max_x);
         x_max = clamp(0, x_max, max_x);
 
@@ -96,30 +102,28 @@ fn main() -> ! {
         for x_pos in x_min..x_max {
             for y_pos in y_min..y_max {
                 if front {
-                    (*bmp).draw_point_page(x_pos, y_pos, color_pal, display::bitmap4::Page::Front);
+                    (*bmp).draw_point_page(x_pos, y_pos, color_pal as u8, display::bitmap4::Page::Front);
                 } else {
-                    (*bmp).draw_point_page(x_pos, y_pos, color_pal, display::bitmap4::Page::Back);
+                    (*bmp).draw_point_page(x_pos, y_pos, color_pal as u8, display::bitmap4::Page::Back);
                 }
             }
         }
     };
 
-    let clear_screen = |bmp: &mut display::bitmap4::Bitmap4, color_pal: u8, front: bool| {
-        draw_rect_page(bmp, 0, 0, max_x, max_y, color_pal, front);
-    };
 
-    bitmap.set_palette_entry(WHITE_PAL as u32, WHITE);
-    bitmap.set_palette_entry(BLACK_PAL as u32, BLACK);
-    bitmap.set_palette_entry(RED_PAL as u32, RED);
-    bitmap.set_palette_entry(GREEN_PAL as u32, GREEN);
-    bitmap.set_palette_entry(BLUE_PAL as u32, BLUE);
+    bitmap.set_palette_entry(WHITE_PAL, WHITE);
+    bitmap.set_palette_entry(BLACK_PAL, BLACK);
+    bitmap.set_palette_entry(RED_PAL, RED);
+    bitmap.set_palette_entry(GREEN_PAL, GREEN);
+    bitmap.set_palette_entry(BLUE_PAL, BLUE);
 
-    mgba.set_level(agb::mgba::DebugLevel::Debug);
-
-    clear_screen(&mut bitmap, WHITE_PAL, true);
-    clear_screen(&mut bitmap, WHITE_PAL, false);
+    //clear
+    draw_rect_page(&mut bitmap, 0, 0, max_x, max_y, WHITE_PAL, false);
+    draw_rect_page(&mut bitmap, 0, 0, max_x, max_y, WHITE_PAL, true);
 
     loop {
+        vblank.wait_for_vblank();
+
         input.update();
 
         // CALC POSITIONS
@@ -159,23 +163,23 @@ fn main() -> ! {
             ball_vy = -ball_vy;
         }
 
-        // DRAW 
-        //draw_rect(&mut bitmap, paddle_new_x-PADDLE_HALF_WIDTH,paddle_y_top,paddle_new_x+PADDLE_HALF_WIDTH,paddle_y_bottom, RED_PAL);
-        //draw_rect(&mut bitmap, ball_new_x-BALL_RADIUS, ball_new_y-BALL_RADIUS, ball_new_x+BALL_RADIUS, ball_new_y+BALL_RADIUS, RED_PAL);
-        draw_rect_page(&mut bitmap, ball_x-BALL_RADIUS, ball_y-BALL_RADIUS, ball_x+BALL_RADIUS, ball_y+BALL_RADIUS, WHITE_PAL, true);
-        draw_rect_page(&mut bitmap, paddle_x-PADDLE_HALF_WIDTH,paddle_y_top,paddle_x+PADDLE_HALF_WIDTH,paddle_y_bottom, WHITE_PAL, true);
-        draw_rect_page(&mut bitmap, paddle_new_x-PADDLE_HALF_WIDTH,paddle_y_top,paddle_new_x+PADDLE_HALF_WIDTH,paddle_y_bottom, RED_PAL, true);
-        draw_rect_page(&mut bitmap, ball_new_x-BALL_RADIUS, ball_new_y-BALL_RADIUS, ball_new_x+BALL_RADIUS, ball_new_y+BALL_RADIUS, RED_PAL, true);
+        draw_rect(&mut bitmap, paddle_new_x-PADDLE_HALF_WIDTH,paddle_y_top,paddle_new_x+PADDLE_HALF_WIDTH,paddle_y_bottom, BLACK_PAL);
+        // CLEAR
+        //draw_rect(&mut bitmap, ball_offscreen_x-BALL_RADIUS, ball_offscreen_y-BALL_RADIUS, ball_offscreen_x+BALL_RADIUS, ball_offscreen_y+BALL_RADIUS, WHITE_PAL);
+        //draw_rect(&mut bitmap, paddle_offscreen_x-PADDLE_HALF_WIDTH,paddle_y_top,paddle_offscreen_x+PADDLE_HALF_WIDTH,paddle_y_bottom, WHITE_PAL);
+        draw_rect(&mut bitmap, 0,paddle_y_top,max_x,paddle_y_bottom, WHITE_PAL);
+        
+        //draw_rect(&mut bitmap, ball_new_x-BALL_RADIUS, ball_new_y-BALL_RADIUS, ball_new_x+BALL_RADIUS, ball_new_y+BALL_RADIUS, BLACK_PAL);
+        //draw_rect(&mut bitmap, paddle_new_x-PADDLE_HALF_WIDTH,paddle_y_top,paddle_new_x+PADDLE_HALF_WIDTH,paddle_y_bottom, BLACK_PAL);
 
         // CYCLE GRAPHICS PAGES
-        vblank.wait_for_vblank();
-        //bitmap.flip_page();
-
-        // CLEAR
-        //draw_rect(&mut bitmap, ball_x-BALL_RADIUS, ball_y-BALL_RADIUS, ball_x+BALL_RADIUS, ball_y+BALL_RADIUS, WHITE_PAL);
-        //draw_rect(&mut bitmap, paddle_x-PADDLE_HALF_WIDTH,paddle_y_top,paddle_x+PADDLE_HALF_WIDTH,paddle_y_bottom, WHITE_PAL);
+        bitmap.flip_page();
 
         // COMMIT POSITIONS
+        paddle_offscreen_x = paddle_x;
+        ball_offscreen_x = ball_x;
+        ball_offscreen_y = ball_y;
+
         paddle_x = paddle_new_x;
         ball_x = ball_new_x;
         ball_y = ball_new_y;
